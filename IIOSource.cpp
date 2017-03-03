@@ -4,6 +4,8 @@
 #include <Pothos/Framework.hpp>
 #include <Poco/Error.h>
 #include <iio.h>
+#include <string>
+#include <cstring>
 
 /***********************************************************************
  * |PothosDoc IIO Source
@@ -87,17 +89,21 @@ public:
     void work(void)
     {
         //get new samples from iio device
-        int byte_count = iio_buffer_refill(this->buf);
+        ssize_t byte_count = iio_buffer_refill(this->buf);
+        if (byte_count < 0)
+        {
+            throw Pothos::SystemException("IIOSource::work()", "iio_buffer_refill: " + Poco::Error::getMessage(-byte_count));
+        }
 
         //calculate number of samples in buffer
-        int sample_count = byte_count / iio_buffer_step(this->buf);
+        auto sample_count = (size_t)byte_count / (size_t)iio_buffer_step(this->buf);
 
         //get output buffer
         auto outputPort0 = this->output(0);
         auto outputBuffer = outputPort0->getBuffer(sample_count);
 
         //copy samples into output buffer
-        iio_channel_read(this->chn, this->buf, (void*)outputBuffer.address, outputBuffer.length);
+        outputBuffer.length = iio_channel_read(this->chn, this->buf, (void*)outputBuffer.address, outputBuffer.length);
 
         //push output buffer
         outputPort0->postBuffer(outputBuffer);
