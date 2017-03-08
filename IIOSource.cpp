@@ -1,11 +1,11 @@
 // Copyright (c) 2016 Fiach Antaw
 // SPDX-License-Identifier: BSL-1.0
 
-#include <Pothos/Framework.hpp>
 #include <Poco/Error.h>
-#include <iio.h>
+#include <memory>
 #include <string>
 #include <cstring>
+#include "IIOSupport.hpp"
 
 /***********************************************************************
  * |PothosDoc IIO Source
@@ -16,97 +16,95 @@
  * |category /Sources
  * |keywords iio industrial io adc sdr
  *
- * |param deviceName[Device Name] The name of an IIO device on the system,
- * or the integer index of an IIO device on the system.
+ * |param deviceId[Device ID] The ID of an IIO device on the system.
  * |widget StringEntry()
  * |default ""
  *
- * |param channelName[Channel Name] The name of a channel on the IIO device,
- * or the integer index of a channel on the IIO device.
- * |widget StringEntry()
- * |default ""
- *
- * |factory /iio/source(deviceName, channelName)
+ * |factory /iio/source(deviceId)
  **********************************************************************/
 class IIOSource : public Pothos::Block
 {
 private:
-    struct iio_context *ctx;
-    struct iio_channel *chn;
-    struct iio_buffer *buf;
+    std::unique_ptr<IIODevice> dev;
+    std::unique_ptr<IIOBuffer> buf;
 public:
-    IIOSource(const std::string &deviceName, const std::string &channelName)
+    IIOSource(const std::string &deviceId)
     {
-        //create libiio context
-        this->ctx = iio_create_default_context();
-        if (!this->ctx)
-        {
-            throw Pothos::SystemException("IIOSource::IIOSource()", "iio_create_default_context: " + Poco::Error::getMessage(Poco::Error::last()));
-        }
+        //get libiio context
+        IIOContext& ctx = IIOContext::get();
         
         //find iio device
-        struct iio_device *dev = iio_context_find_device(this->ctx, deviceName.c_str());
-        if (!dev)
+        for (auto d : ctx.devices())
         {
-            throw Pothos::SystemException("IIOSource::IIOSource()", "iio_context_find_device: device not found");
+            if (d.id() == deviceId)
+            {
+                this->dev = std::unique_ptr<IIODevice>(new IIODevice(d));
+                break;
+            }
+        }
+        if (!this->dev)
+        {
+            throw Pothos::SystemException("IIOSource::IIOSource()", "device not found");
         }
 
-        //disable all channels
-        for (unsigned int i = 0; i < iio_device_get_channels_count(dev); i++)
+        //disable all output channels/enable all input channels
+        bool have_scan_elements = false;
+        for (auto c : this->dev->channels())
         {
-            iio_channel_disable(iio_device_get_channel(dev, i));
+            if (c.isOutput())
+            {
+                c.disable();
+            }
+            else
+            {
+                c.enable();
+
+                //set up output ports for scannable input channels
+                if (c.isScanElement())
+                {
+                    this->setupOutput(c.id(), c.dtype());
+                    have_scan_elements = true;
+                }
+            }
         }
 
-        //find and enable chosen iio channel
-        this->chn = iio_device_find_channel(dev, channelName.c_str(), false);
-        if (!this->chn)
-        {
-            throw Pothos::SystemException("IIOSource::IIOSource()", "iio_device_find_channel: channel not found");
+        //create sample buffer if we've got any scan elements
+        //buffer size defaults to 4096 samples per buffer, for now
+        if (have_scan_elements) {
+            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(4096, false))));
+            if (!this->buf)
+            {
+                throw Pothos::SystemException("IIOSource::IIOSource()", "buffer creation failed");
+            }
         }
-        iio_channel_enable(this->chn);
-
-        //create sample buffer (default to 4096 samples per buffer, for now)
-        this->buf = iio_device_create_buffer(dev, 4096, false);
-        if (!this->buf)
-        {
-            throw Pothos::SystemException("IIOSource::IIOSource()", "iio_device_create_buffer: " + Poco::Error::getMessage(Poco::Error::last()));
-        }
-
-        //set up output port
-        this->setupOutput(0, typeid(unsigned int));
     }
 
-    ~IIOSource(void)
+    static Block *make(const std::string &deviceId)
     {
-        iio_context_destroy(this->ctx);
-    }
-
-    static Block *make(const std::string &deviceName, const std::string &channelName)
-    {
-        return new IIOSource(deviceName, channelName);
+        return new IIOSource(deviceId);
     }
 
     void work(void)
     {
-        //get new samples from iio device
-        ssize_t byte_count = iio_buffer_refill(this->buf);
-        if (byte_count < 0)
-        {
-            throw Pothos::SystemException("IIOSource::work()", "iio_buffer_refill: " + Poco::Error::getMessage(-byte_count));
+        if (this->buf) {
+            //get new samples from iio device
+            auto bytes_read = this->buf->refill();
+            //libiio read operations shouldn't return partial scans
+            assert(bytes_read % this->buf->step() == 0);
+            auto sample_count = bytes_read / this->buf->step();
+
+            //write samples to output ports
+            for (auto c : this->dev->channels())
+            {
+                if (this->allOutputs().count(c.id()) > 0) {
+                    auto outputPort = this->output(c.id());
+                    auto outputBuffer = outputPort->getBuffer(sample_count);
+
+                    outputBuffer.length = c.read(*this->buf, (void*)outputBuffer.address, sample_count);
+                    outputPort->postBuffer(outputBuffer);
+                }
+            }
         }
-
-        //calculate number of samples in buffer
-        auto sample_count = (size_t)byte_count / (size_t)iio_buffer_step(this->buf);
-
-        //get output buffer
-        auto outputPort0 = this->output(0);
-        auto outputBuffer = outputPort0->getBuffer(sample_count);
-
-        //copy samples into output buffer
-        outputBuffer.length = iio_channel_read(this->chn, this->buf, (void*)outputBuffer.address, outputBuffer.length);
-
-        //push output buffer
-        outputPort0->postBuffer(outputBuffer);
     }
 };
 

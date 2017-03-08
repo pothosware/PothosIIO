@@ -46,6 +46,7 @@ POTHOS_MODULE_UTIL(
     SOURCES
         IIOInfo.cpp
 	IIOSource.cpp
+	IIOSupport.cpp
     LIBRARIES ${LIBIIO_LIBRARIES}
     DESTINATION iio
     ENABLE_DOCS
