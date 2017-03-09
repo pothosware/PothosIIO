@@ -9,6 +9,8 @@
 #include <string>
 #include "IIOSupport.hpp"
 
+#include <typeinfo>
+
 static Poco::JSON::Object::Ptr getIIOChannelInfo(IIOChannel chn)
 {
     Poco::JSON::Object::Ptr infoObject = new Poco::JSON::Object();
@@ -18,6 +20,17 @@ static Poco::JSON::Object::Ptr getIIOChannelInfo(IIOChannel chn)
     infoObject->set("Name", chn.name());
     infoObject->set("Is Scan Element", chn.isScanElement() ? "true" : "false");
     infoObject->set("Direction", chn.isOutput() ? "Output" : "Input");
+
+    // Channel attributes
+    Poco::JSON::Array::Ptr attrArray = new Poco::JSON::Array();
+    infoObject->set("Attributes", attrArray);
+    for (auto a : chn.attributes())
+    {
+        Poco::JSON::Object::Ptr attrObject = new Poco::JSON::Object();
+        attrObject->set("Name", a.name());
+        attrObject->set("Value", a.value());
+        attrArray->add(attrObject);
+    }
 
     return infoObject;
 }
@@ -30,6 +43,17 @@ static Poco::JSON::Object::Ptr getIIODeviceInfo(IIODevice dev)
     infoObject->set("Device ID", dev.id());
     infoObject->set("Device Name", dev.name());
     infoObject->set("Is Trigger", dev.isTrigger() ? "true" : "false");
+
+    // Device attributes
+    Poco::JSON::Array::Ptr attrArray = new Poco::JSON::Array();
+    infoObject->set("Attributes", attrArray);
+    for (auto a : dev.attributes())
+    {
+        Poco::JSON::Object::Ptr attrObject = new Poco::JSON::Object();
+        attrObject->set("Name", a.name());
+        attrObject->set("Value", a.value());
+        attrArray->add(attrObject);
+    }
 
     // Channels
     Poco::JSON::Array::Ptr chanArray = new Poco::JSON::Array();

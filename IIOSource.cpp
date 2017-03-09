@@ -47,6 +47,23 @@ public:
             throw Pothos::SystemException("IIOSource::IIOSource()", "device not found");
         }
 
+        //set up probes/setters for device attributes 
+        for (auto a : this->dev->attributes())
+        {
+            Pothos::Callable attrGetter(&IIOSource::getDeviceAttribute);
+            Pothos::Callable attrSetter(&IIOSource::setDeviceAttribute);
+            attrGetter.bind(std::ref(*this), 0);
+            attrGetter.bind(a, 1);
+            attrSetter.bind(std::ref(*this), 0);
+            attrSetter.bind(a, 1);
+
+            std::string getDeviceAttrName = "deviceAttribute[" + a.name() + "]";
+            std::string setDeviceAttrName = "setdeviceAttribute[" + a.name() + "]";
+            this->registerCallable(getDeviceAttrName, attrGetter);
+            this->registerCallable(setDeviceAttrName, attrSetter);
+            this->registerProbe(getDeviceAttrName);
+        }
+
         //disable all output channels/enable all input channels
         bool have_scan_elements = false;
         for (auto c : this->dev->channels())
@@ -65,6 +82,23 @@ public:
                     this->setupOutput(c.id(), c.dtype());
                     have_scan_elements = true;
                 }
+
+                //set up probes/setters for channel attributes
+                for (auto a : c.attributes())
+                {
+                    Pothos::Callable attrGetter(&IIOSource::getChannelAttribute);
+                    Pothos::Callable attrSetter(&IIOSource::setChannelAttribute);
+                    attrGetter.bind(std::ref(*this), 0);
+                    attrGetter.bind(a, 1);
+                    attrSetter.bind(std::ref(*this), 0);
+                    attrSetter.bind(a, 1);
+
+                    std::string getChannelAttrName = "channelAttribute[" + c.id() + "][" + a.name() + "]";
+                    std::string setChannelAttrName = "setChannelAttribute[" + c.id() + "][" + a.name() + "]";
+                    this->registerCallable(getChannelAttrName, attrGetter);
+                    this->registerCallable(setChannelAttrName, attrSetter);
+                    this->registerProbe(getChannelAttrName);
+                }
             }
         }
 
@@ -82,6 +116,26 @@ public:
     static Block *make(const std::string &deviceId)
     {
         return new IIOSource(deviceId);
+    }
+
+    std::string getDeviceAttribute(IIOAttr<IIODevice> a)
+    {
+        return a.value();
+    }
+
+    void setDeviceAttribute(IIOAttr<IIODevice> a, Pothos::Object value)
+    {
+        a = value.toString();
+    }
+
+    std::string getChannelAttribute(IIOAttr<IIOChannel> a)
+    {
+        return a.value();
+    }
+
+    void setChannelAttribute(IIOAttr<IIOChannel> a, Pothos::Object value)
+    {
+        a = value.toString();
     }
 
     void work(void)
