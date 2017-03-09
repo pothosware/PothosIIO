@@ -45,6 +45,7 @@ POTHOS_MODULE_UTIL(
     TARGET IIOSupport
     SOURCES
         IIOInfo.cpp
+	IIOSink.cpp
 	IIOSource.cpp
 	IIOSupport.cpp
     LIBRARIES ${LIBIIO_LIBRARIES}
