@@ -7,7 +7,10 @@
 #include <Poco/SingletonHolder.h>
 #include <string>
 #include <vector>
+#include <iterator>
 
+template <class T>
+class IIOAttr;
 class IIOBuffer;
 class IIOChannel;
 class IIODevice;
@@ -68,10 +71,92 @@ public:
 };
 
 /*!
+ * IIOAttrs is a map-like representation of attributes exposed by libiio.
+ */
+template <class T>
+class IIOAttrs
+{
+    friend T;
+private:
+    T parent;
+    IIOAttrs<T>(T parent);
+public:
+    class Iterator
+    {
+        friend class IIOAttrs<T>;
+    private:
+        T parent;
+        unsigned int idx;
+        Iterator(T parent, unsigned int idx = 0);
+    public:
+        Iterator& operator++()
+        {
+            idx++;
+            return *this;
+        }
+        Iterator operator++(int)
+        {
+            Iterator retval = *this;
+            ++(*this);
+            return retval;
+        }
+        bool operator==(Iterator other) const
+        {
+            return (this->parent == other.parent) && (this->idx == other.idx);
+        }
+        bool operator!=(Iterator other) const
+        {
+            return !(*this == other);
+        }
+        IIOAttr<T> operator*();
+        using difference_type = unsigned int;
+        using value_type = IIOAttr<T>;
+        using pointer = const IIOAttr<T>*;
+        using reference = const IIOAttr<T>&;
+        using iterator_category = std::forward_iterator_tag;
+    };
+
+    Iterator begin();
+    Iterator end();
+
+    IIOAttr<T> at(const std::string& name);
+    size_t size() const;
+    bool empty() const;
+};
+
+/*!
+ * Represents a single attribute on a libiio object.
+ */
+template <class T>
+class IIOAttr
+{
+    friend class IIOAttrs<T>::Iterator;
+private:
+    IIOAttr<T>(T parent, const char* attr);
+    T parent;
+    const char* attr;
+public:
+    /*!
+     * Get the name of the attribute.
+     */
+    std::string name();
+
+    /*!
+     * Get the value of the attribute.
+     */
+    std::string value();
+
+    IIOAttr<T>& operator= (const std::string& other);
+    operator std::string() const;
+};
+
+/*!
  * IIODevice represents an IIO device exposed via libiio.
  */
 class IIODevice
 {
+    friend class IIOAttr<IIODevice>;
+    friend class IIOAttrs<IIODevice>;
     friend class IIOBuffer;
     friend class IIOChannel;
     friend class IIOContext;
@@ -81,7 +166,22 @@ private:
 
     IIODevice(std::shared_ptr<IIOContextRaw> ctx, const struct iio_device *device);
 
+    const char * iio_get_attr(unsigned int idx) const;
+    unsigned int iio_get_attrs_count() const;
+    ssize_t iio_attr_read(const char *attr, char *dst, size_t len) const;
+    ssize_t iio_attr_write(const char *attr, const char *src) const;
 public:
+
+    bool operator==(IIODevice other) const
+    {
+        return this->device == other.device;
+    }
+
+    bool operator!=(IIODevice other) const
+    {
+        return !(*this == other);
+    }
+
     /*!
      * Get the ID of this IIO device.
      */
@@ -91,6 +191,12 @@ public:
      * Get the name of this IIO device, or "<unnamed>" if the device has no name.
      */
     std::string name(void);
+
+    /*!
+     * The attributes() method returns an object exposing attributes available to
+     * be read or set on this IIO device.
+     */
+    IIOAttrs<IIODevice> attributes(void);
 
     /*!
      * The channels() method returns a set of IIOChannel objects representing
@@ -187,6 +293,8 @@ public:
  * IIOChannel represents an IIO device channel exposed via libiio.
  */
 class IIOChannel {
+    friend class IIOAttr<IIOChannel>;
+    friend class IIOAttrs<IIOChannel>;
     friend class IIODevice;
 private:
     std::shared_ptr<IIOContextRaw> ctx;
@@ -194,7 +302,22 @@ private:
 
     IIOChannel(std::shared_ptr<IIOContextRaw> ctx, struct iio_channel *channel);
 
+    const char * iio_get_attr(unsigned int idx) const;
+    unsigned int iio_get_attrs_count() const;
+    ssize_t iio_attr_read(const char *attr, char *dst, size_t len) const;
+    ssize_t iio_attr_write(const char *attr, const char *src) const;
 public:
+
+    bool operator==(IIOChannel other) const
+    {
+        return this->channel == other.channel;
+    }
+
+    bool operator!=(IIOChannel other) const
+    {
+        return !(*this == other);
+    }
+
     /*!
      * Get the device that this channel belongs to.
      */
@@ -209,6 +332,12 @@ public:
      * Get the name of this IIO device channel, or "<unnamed>" if the channel has no name.
      */
     std::string name(void);
+
+    /*!
+     * The attributes() method returns an object exposing attributes available to
+     * be read or set on this IIO channel.
+     */
+    IIOAttrs<IIOChannel> attributes(void);
 
     /*!
      * Enable this channel.
