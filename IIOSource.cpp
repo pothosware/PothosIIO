@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Poco/Error.h>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <cstring>
+#include <vector>
 #include "IIOSupport.hpp"
 
 /***********************************************************************
@@ -20,7 +22,12 @@
  * |widget StringEntry()
  * |default ""
  *
- * |factory /iio/source(deviceId)
+ * |param channelIds[Channel IDs] The IDs of channels to enable.
+ * If no IDs are specified, all channels will be enabled.
+ * |preview disable
+ * |default []
+ *
+ * |factory /iio/source(deviceId, channelIds)
  **********************************************************************/
 class IIOSource : public Pothos::Block
 {
@@ -28,7 +35,7 @@ private:
     std::unique_ptr<IIODevice> dev;
     std::unique_ptr<IIOBuffer> buf;
 public:
-    IIOSource(const std::string &deviceId)
+    IIOSource(const std::string &deviceId, const std::vector<std::string> &channelIds)
     {
         //get libiio context
         IIOContext& ctx = IIOContext::get();
@@ -69,36 +76,36 @@ public:
         for (auto c : this->dev->channels())
         {
             if (c.isOutput())
+                continue;
+            std::string cId = c.id();
+            if (channelIds.size() > 0 && std::none_of(channelIds.begin(), channelIds.end(),
+                    [cId](std::string s){ return s == cId; }))
+                continue;
+
+            c.enable();
+
+            //set up output ports for scannable input channels
+            if (c.isScanElement())
             {
-                c.disable();
+                this->setupOutput(c.id(), c.dtype());
+                have_scan_elements = true;
             }
-            else
+
+            //set up probes/setters for channel attributes
+            for (auto a : c.attributes())
             {
-                c.enable();
+                Pothos::Callable attrGetter(&IIOSource::getChannelAttribute);
+                Pothos::Callable attrSetter(&IIOSource::setChannelAttribute);
+                attrGetter.bind(std::ref(*this), 0);
+                attrGetter.bind(a, 1);
+                attrSetter.bind(std::ref(*this), 0);
+                attrSetter.bind(a, 1);
 
-                //set up output ports for scannable input channels
-                if (c.isScanElement())
-                {
-                    this->setupOutput(c.id(), c.dtype());
-                    have_scan_elements = true;
-                }
-
-                //set up probes/setters for channel attributes
-                for (auto a : c.attributes())
-                {
-                    Pothos::Callable attrGetter(&IIOSource::getChannelAttribute);
-                    Pothos::Callable attrSetter(&IIOSource::setChannelAttribute);
-                    attrGetter.bind(std::ref(*this), 0);
-                    attrGetter.bind(a, 1);
-                    attrSetter.bind(std::ref(*this), 0);
-                    attrSetter.bind(a, 1);
-
-                    std::string getChannelAttrName = "channelAttribute[" + c.id() + "][" + a.name() + "]";
-                    std::string setChannelAttrName = "setChannelAttribute[" + c.id() + "][" + a.name() + "]";
-                    this->registerCallable(getChannelAttrName, attrGetter);
-                    this->registerCallable(setChannelAttrName, attrSetter);
-                    this->registerProbe(getChannelAttrName);
-                }
+                std::string getChannelAttrName = "channelAttribute[" + c.id() + "][" + a.name() + "]";
+                std::string setChannelAttrName = "setChannelAttribute[" + c.id() + "][" + a.name() + "]";
+                this->registerCallable(getChannelAttrName, attrGetter);
+                this->registerCallable(setChannelAttrName, attrSetter);
+                this->registerProbe(getChannelAttrName);
             }
         }
 
@@ -113,9 +120,9 @@ public:
         }
     }
 
-    static Block *make(const std::string &deviceId)
+    static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds)
     {
-        return new IIOSource(deviceId);
+        return new IIOSource(deviceId, channelIds);
     }
 
     std::string getDeviceAttribute(IIOAttr<IIODevice> a)
