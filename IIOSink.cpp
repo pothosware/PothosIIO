@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Poco/Error.h>
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
 #include <poll.h>
 #include <algorithm>
 #include <memory>
@@ -20,7 +22,6 @@
  * |keywords iio industrial io adc sdr
  *
  * |param deviceId[Device ID] The ID of an IIO device on the system.
- * |widget StringEntry()
  * |default ""
  *
  * |param channelIds[Channel IDs] The IDs of channels to enable.
@@ -39,9 +40,18 @@ private:
 public:
     IIOSink(const std::string &deviceId, const std::vector<std::string> &channelIds)
     {
+        //expose overlay hook
+        this->registerCall(this, POTHOS_FCN_TUPLE(IIOSink, overlay));
+
         //get libiio context
         IIOContext& ctx = IIOContext::get();
-        
+
+        //if deviceId is blank, create a partial object that exposes the
+        //overlay hook for the gui but cannot be activated
+        if (deviceId == "") {
+            return;
+        }
+
         //find iio device
         for (auto d : ctx.devices())
         {
@@ -109,6 +119,49 @@ public:
         }
     }
 
+    std::string overlay(void) const
+    {
+        IIOContext& ctx = IIOContext::get();
+
+        Poco::JSON::Object::Ptr topObj(new Poco::JSON::Object());
+
+        Poco::JSON::Array::Ptr params(new Poco::JSON::Array());
+        topObj->set("params", params);
+
+        //configure deviceId dropdown options
+        Poco::JSON::Object::Ptr deviceIdParam(new Poco::JSON::Object());
+        params->add(deviceIdParam);
+        Poco::JSON::Array::Ptr deviceIdOpts(new Poco::JSON::Array());
+        deviceIdParam->set("key", "deviceId");
+        deviceIdParam->set("options", deviceIdOpts);
+        Poco::JSON::Object::Ptr deviceIdWidgetKwargs(new Poco::JSON::Object());
+        deviceIdWidgetKwargs->set("editable", false);
+        deviceIdParam->set("widgetKwargs", deviceIdWidgetKwargs);
+        deviceIdParam->set("widgetType", "DropDown");
+
+        //add empty device option associated
+        Poco::JSON::Object::Ptr emptyOption(new Poco::JSON::Object());
+        emptyOption->set("name", "");
+        emptyOption->set("value", "\"\"");
+        deviceIdOpts->add(emptyOption);
+
+        //enumerate iio devices
+        for (auto d : ctx.devices())
+        {
+            //use the standard label convention, but fall-back on driver/serial
+            std::string name;
+
+            Poco::JSON::Object::Ptr option(new Poco::JSON::Object());
+            option->set("name", d.name() + " (" + d.id() + ")");
+            option->set("value", "\"" + d.id() + "\"");
+            deviceIdOpts->add(option);
+        }
+
+        std::stringstream ss;
+        topObj->stringify(ss, 4);
+        return ss.str();
+    }
+
     static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds)
     {
         return new IIOSink(deviceId, channelIds);
@@ -136,6 +189,11 @@ public:
 
     void activate(void)
     {
+        if (!this->dev)
+        {
+            throw Pothos::SystemException("IIOSink::activate()", "no device specified");
+        }
+
         bool haveScanElements = false;
         if (this->buf) {
             this->buf.reset();
