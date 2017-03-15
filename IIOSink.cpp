@@ -35,6 +35,7 @@ class IIOSink : public Pothos::Block
 private:
     std::unique_ptr<IIODevice> dev;
     std::unique_ptr<IIOBuffer> buf;
+    std::vector<IIOChannel> channels;
 public:
     IIOSink(const std::string &deviceId, const std::vector<std::string> &channelIds)
     {
@@ -72,8 +73,7 @@ public:
             this->registerProbe(getDeviceAttrName);
         }
 
-        //disable all output channels/enable all input channels
-        bool have_scan_elements = false;
+        //set up probes/ports for selected input channels
         for (auto c : this->dev->channels())
         {
             if (!c.isOutput())
@@ -82,14 +82,12 @@ public:
             if (channelIds.size() > 0 && std::none_of(channelIds.begin(), channelIds.end(),
                     [cId](std::string s){ return s == cId; }))
                 continue;
-
-            c.enable();
+            this->channels.push_back(c);
 
             //set up input ports for scannable input channels
             if (c.isScanElement())
             {
                 this->setupInput(c.id(), c.dtype());
-                have_scan_elements = true;
             }
 
             //set up probes/setters for channel attributes
@@ -108,17 +106,6 @@ public:
                 this->registerCallable(setChannelAttrName, attrSetter);
                 this->registerProbe(getChannelAttrName);
             }
-        }
-
-        //create sample buffer if we've got any scan elements
-        //buffer size defaults to 4096 samples per buffer, for now
-        if (have_scan_elements) {
-            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(4096, false))));
-            if (!this->buf)
-            {
-                throw Pothos::SystemException("IIOSink::IIOSink()", "buffer creation failed");
-            }
-            this->buf->setBlockingMode(false);
         }
     }
 
@@ -147,6 +134,42 @@ public:
         a = value.toString();
     }
 
+    void activate(void)
+    {
+        bool haveScanElements = false;
+        if (this->buf) {
+            this->buf.reset();
+        }
+
+        for (auto c : this->channels)
+        {
+            c.enable();
+
+            if (c.isScanElement())
+            {
+                haveScanElements = true;
+            }
+        }
+
+        //create sample buffer if we've got any scan elements
+        //buffer size defaults to 4096 samples per buffer, for now
+        if (haveScanElements) {
+            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(4096, false))));
+            if (!this->buf)
+            {
+                throw Pothos::SystemException("IIOSink::activate()", "buffer creation failed");
+            }
+            this->buf->setBlockingMode(false);
+        }
+    }
+
+    void deactivate(void)
+    {
+        if (this->buf) {
+            this->buf.reset();
+        }
+    }
+
     void work(void)
     {
         auto sample_count = this->workInfo().minInElements;
@@ -168,10 +191,10 @@ public:
             else if (ret == 0)
                 return this->yield();
 
-            //write samples to outputs
-            for (auto c : this->dev->channels())
+            //consume samples
+            for (auto c : this->channels)
             {
-                if (this->allInputs().count(c.id()) > 0) {
+                if (c.isScanElement()) {
                     auto inputPort = this->input(c.id());
                     auto inputBuffer = inputPort->buffer();
 
