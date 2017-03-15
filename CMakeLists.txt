@@ -14,7 +14,7 @@ endif()
 # Find libiio
 ########################################################################
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
-find_package(libiio)
+find_package(libiio 0.9)
 
 if (LIBIIO_FOUND)
     message(STATUS "LIBIIO_INCLUDE_DIRS: ${LIBIIO_INCLUDE_DIRS}")
