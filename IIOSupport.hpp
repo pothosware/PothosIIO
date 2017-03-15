@@ -258,6 +258,16 @@ public:
     IIODevice device(void);
 
     /*!
+     * Set the blocking I/O mode.
+     */
+    void setBlockingMode(bool blocking);
+
+    /*!
+     * Get a file descriptor that can be blocked on via the poll syscall.
+     */
+    int fd(void);
+
+    /*!
      * Fill the buffer with fresh samples from the owning device.
      *
      * Note that this function is only valid for buffers containing input

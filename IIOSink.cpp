@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Poco/Error.h>
+#include <poll.h>
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -117,6 +118,7 @@ public:
             {
                 throw Pothos::SystemException("IIOSink::IIOSink()", "buffer creation failed");
             }
+            this->buf->setBlockingMode(false);
         }
     }
 
@@ -150,6 +152,22 @@ public:
         auto sample_count = this->workInfo().minInElements;
  
         if (this->buf) {
+            //wait for samples
+            struct pollfd pfd = {
+                .fd = this->buf->fd(),
+                .events = POLLOUT,
+                .revents = 0
+            };
+            struct timespec ts = {
+                .tv_sec = static_cast<time_t>(this->workInfo().maxTimeoutNs/10000000),
+                .tv_nsec = static_cast<long int>(this->workInfo().maxTimeoutNs % 10000000)
+            };
+            int ret = ppoll(&pfd, 1, &ts, NULL);
+            if (ret < 0)
+                throw Pothos::SystemException("IIOSource::work()", "ppoll failed: " + Poco::Error::getMessage(-ret));
+            else if (ret == 0)
+                return this->yield();
+
             //write samples to outputs
             for (auto c : this->dev->channels())
             {

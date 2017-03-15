@@ -406,6 +406,30 @@ IIOBuffer::~IIOBuffer(void)
     }
 }
 
+IIODevice IIOBuffer::device(void)
+{
+    return IIODevice(this->ctx, iio_buffer_get_device(this->buffer));
+}
+
+void IIOBuffer::setBlockingMode(bool blocking)
+{
+    int ret = iio_buffer_set_blocking_mode(this->buffer, blocking);
+    if (ret)
+    {
+        throw Pothos::SystemException("IIOBuffer::setBlockingMode()", "iio_buffer_set_blocking_mode: " + Poco::Error::getMessage(-ret));
+    }
+}
+
+int IIOBuffer::fd(void)
+{
+    int ret = iio_buffer_get_poll_fd(this->buffer);
+    if (ret < 0)
+    {
+        throw Pothos::SystemException("IIOBuffer::fd()", "iio_buffer_get_poll_fd: " + Poco::Error::getMessage(-ret));
+    }
+    return ret;
+}
+
 size_t IIOBuffer::refill(void)
 {
     ssize_t ret = iio_buffer_refill(this->buffer);
