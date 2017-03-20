@@ -29,7 +29,16 @@
  * |preview disable
  * |default []
  *
- * |factory /iio/source(deviceId, channelIds)
+ * |param enablePorts[Enable Ports] If true and compatible channels are
+ * enabled, enable input ports. This option reserves the IIO buffer for this
+ * device, and so can only be enabled for one IIO block per device.
+ * |preview disable
+ * |default True
+ * |widget DropDown()
+ * |option [True] True
+ * |option [False] False
+ * 
+ * |factory /iio/source(deviceId, channelIds, enablePorts)
  **********************************************************************/
 class IIOSource : public Pothos::Block
 {
@@ -37,8 +46,10 @@ private:
     std::unique_ptr<IIODevice> dev;
     std::unique_ptr<IIOBuffer> buf;
     std::vector<IIOChannel> channels;
+    bool enablePorts;
 public:
-    IIOSource(const std::string &deviceId, const std::vector<std::string> &channelIds)
+    IIOSource(const std::string &deviceId, const std::vector<std::string> &channelIds,
+        const bool &enablePorts) : enablePorts(enablePorts)
     {
         //expose overlay hook
         this->registerCall(this, POTHOS_FCN_TUPLE(IIOSource, overlay));
@@ -95,7 +106,7 @@ public:
             this->channels.push_back(c);
 
             //set up output ports for scannable input channels
-            if (c.isScanElement())
+            if (c.isScanElement() && this->enablePorts)
             {
                 this->setupOutput(c.id(), c.dtype());
             }
@@ -162,9 +173,10 @@ public:
         return ss.str();
     }
 
-    static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds)
+    static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds,
+        const bool &enablePorts)
     {
-        return new IIOSource(deviceId, channelIds);
+        return new IIOSource(deviceId, channelIds, enablePorts);
     }
 
     std::string getDeviceAttribute(IIOAttr<IIODevice> a)
@@ -211,7 +223,7 @@ public:
 
         //create sample buffer if we've got any scan elements
         //buffer size defaults to 4096 samples per buffer, for now
-        if (haveScanElements) {
+        if (haveScanElements && this->enablePorts) {
             this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(4096, false))));
             if (!this->buf)
             {
