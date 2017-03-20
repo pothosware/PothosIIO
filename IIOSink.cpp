@@ -268,7 +268,7 @@ public:
                     auto inputPort = this->input(c.id());
                     auto inputBuffer = inputPort->buffer();
 
-                    c.write(*this->buf, (void*)inputBuffer.address, sample_count);
+                    c.write(*this->buf, inputBuffer.as<void*>(), sample_count);
                     inputPort->consume(sample_count);
                 }
             }

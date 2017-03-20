@@ -272,7 +272,7 @@ public:
                     auto outputPort = this->output(c.id());
                     auto outputBuffer = outputPort->getBuffer(sample_count);
 
-                    outputBuffer.length = c.read(*this->buf, (void*)outputBuffer.address, sample_count);
+                    outputBuffer.length = c.read(*this->buf, outputBuffer.as<void*>(), sample_count);
                     outputPort->postBuffer(outputBuffer);
                 }
             }
