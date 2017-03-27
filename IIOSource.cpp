@@ -12,6 +12,8 @@
 #include <vector>
 #include "IIOSupport.hpp"
 
+#define IIO_BUFFER_SIZE 4096
+
 /***********************************************************************
  * |PothosDoc IIO Source
  *
@@ -222,9 +224,8 @@ public:
         }
 
         //create sample buffer if we've got any scan elements
-        //buffer size defaults to 4096 samples per buffer, for now
         if (haveScanElements && this->enablePorts) {
-            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(4096, false))));
+            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(IIO_BUFFER_SIZE, false))));
             if (!this->buf)
             {
                 throw Pothos::SystemException("IIOSource::activate()", "buffer creation failed");
@@ -243,6 +244,10 @@ public:
     void work(void)
     {
         if (this->buf) {
+            //verify we have enough space in our output buffers to refill
+            if (this->workInfo().minOutElements < IIO_BUFFER_SIZE)
+                return;
+
             //wait for samples
             struct pollfd pfd = {
                 .fd = this->buf->fd(),
@@ -270,10 +275,10 @@ public:
             {
                 if (c.isScanElement()) {
                     auto outputPort = this->output(c.id());
-                    auto outputBuffer = outputPort->getBuffer(sample_count);
+                    auto outputBuffer = outputPort->buffer();
 
-                    outputBuffer.length = c.read(*this->buf, outputBuffer.as<void*>(), sample_count);
-                    outputPort->postBuffer(outputBuffer);
+                    c.read(*this->buf, outputBuffer.as<void*>(), sample_count);
+                    outputPort->produce(sample_count);
                 }
             }
         }
