@@ -12,8 +12,6 @@
 #include <vector>
 #include "IIOSupport.hpp"
 
-#define IIO_BUFFER_SIZE 4096
-
 /***********************************************************************
  * |PothosDoc IIO Source
  *
@@ -39,8 +37,14 @@
  * |widget DropDown()
  * |option [True] True
  * |option [False] False
+ *
+ * |param bufferSize[Buffer Size] The number of samples to obtain from the IIO
+ * device during each refill operation. Larger numbers may reduce overhead but
+ * increase latency.
+ * |preview disable
+ * |default 2048
  * 
- * |factory /iio/source(deviceId, channelIds, enablePorts)
+ * |factory /iio/source(deviceId, channelIds, enablePorts, bufferSize)
  **********************************************************************/
 class IIOSource : public Pothos::Block
 {
@@ -49,9 +53,11 @@ private:
     std::unique_ptr<IIOBuffer> buf;
     std::vector<IIOChannel> channels;
     bool enablePorts;
+    size_t bufferSize;
 public:
     IIOSource(const std::string &deviceId, const std::vector<std::string> &channelIds,
-        const bool &enablePorts) : enablePorts(enablePorts)
+        const bool &enablePorts, const size_t &bufferSize)
+        : enablePorts(enablePorts), bufferSize(bufferSize)
     {
         //expose overlay hook
         this->registerCall(this, POTHOS_FCN_TUPLE(IIOSource, overlay));
@@ -176,9 +182,9 @@ public:
     }
 
     static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds,
-        const bool &enablePorts)
+        const bool &enablePorts, const size_t &bufferSize)
     {
-        return new IIOSource(deviceId, channelIds, enablePorts);
+        return new IIOSource(deviceId, channelIds, enablePorts, bufferSize);
     }
 
     std::string getDeviceAttribute(IIOAttr<IIODevice> a)
@@ -225,7 +231,7 @@ public:
 
         //create sample buffer if we've got any scan elements
         if (haveScanElements && this->enablePorts) {
-            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(IIO_BUFFER_SIZE, false))));
+            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(this->bufferSize, false))));
             if (!this->buf)
             {
                 throw Pothos::SystemException("IIOSource::activate()", "buffer creation failed");
@@ -245,7 +251,7 @@ public:
     {
         if (this->buf) {
             //verify we have enough space in our output buffers to refill
-            if (this->workInfo().minOutElements < IIO_BUFFER_SIZE)
+            if (this->workInfo().minOutElements < this->bufferSize)
                 return;
 
             //wait for samples

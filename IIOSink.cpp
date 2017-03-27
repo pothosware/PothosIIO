@@ -37,8 +37,14 @@
  * |widget DropDown()
  * |option [True] True
  * |option [False] False
+ *
+ * |param bufferSize[Buffer Size] The number of samples to send to the IIO
+ * device during each push operation. Larger numbers may reduce overhead but
+ * increase latency.
+ * |preview disable
+ * |default 2048
  * 
- * |factory /iio/sink(deviceId, channelIds, enablePorts)
+ * |factory /iio/sink(deviceId, channelIds, enablePorts, bufferSize)
  **********************************************************************/
 class IIOSink : public Pothos::Block
 {
@@ -47,9 +53,11 @@ private:
     std::unique_ptr<IIOBuffer> buf;
     std::vector<IIOChannel> channels;
     bool enablePorts;
+    size_t bufferSize;
 public:
     IIOSink(const std::string &deviceId, const std::vector<std::string> &channelIds,
-        const bool &enablePorts) : enablePorts(enablePorts)
+        const bool &enablePorts, const size_t &bufferSize)
+        : enablePorts(enablePorts), bufferSize(bufferSize)
     {
         //expose overlay hook
         this->registerCall(this, POTHOS_FCN_TUPLE(IIOSink, overlay));
@@ -174,9 +182,9 @@ public:
     }
 
     static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds,
-        const bool &enablePorts)
+        const bool &enablePorts, const size_t &bufferSize)
     {
-        return new IIOSink(deviceId, channelIds, enablePorts);
+        return new IIOSink(deviceId, channelIds, enablePorts, bufferSize);
     }
 
     std::string getDeviceAttribute(IIOAttr<IIODevice> a)
@@ -222,9 +230,8 @@ public:
         }
 
         //create sample buffer if we've got any scan elements
-        //buffer size defaults to 4096 samples per buffer, for now
         if (haveScanElements && this->enablePorts) {
-            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(4096, false))));
+            this->buf = std::unique_ptr<IIOBuffer>(new IIOBuffer(std::move(this->dev->createBuffer(this->bufferSize, false))));
             if (!this->buf)
             {
                 throw Pothos::SystemException("IIOSink::activate()", "buffer creation failed");
