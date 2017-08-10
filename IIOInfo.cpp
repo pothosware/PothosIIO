@@ -11,78 +11,77 @@
 
 #include <typeinfo>
 
-static Poco::JSON::Object::Ptr getIIOChannelInfo(IIOChannel chn)
+#include <json.hpp>
+using json = nlohmann::json;
+
+static json getIIOChannelInfo(IIOChannel chn)
 {
-    Poco::JSON::Object::Ptr infoObject = new Poco::JSON::Object();
+    json infoObject;
 
     // Channel info
-    infoObject->set("ID", chn.id());
-    infoObject->set("Name", chn.name());
-    infoObject->set("Is Scan Element", chn.isScanElement() ? "true" : "false");
-    infoObject->set("Direction", chn.isOutput() ? "Output" : "Input");
+    infoObject["ID"] = chn.id();
+    infoObject["Name"] = chn.name();
+    infoObject["Is Scan Element"] = chn.isScanElement() ? "true" : "false";
+    infoObject["Direction"] = chn.isOutput() ? "Output" : "Input";
 
     // Channel attributes
-    Poco::JSON::Array::Ptr attrArray = new Poco::JSON::Array();
-    infoObject->set("Attributes", attrArray);
+    auto &attrArray = infoObject["Attributes"];
     for (auto a : chn.attributes())
     {
-        Poco::JSON::Object::Ptr attrObject = new Poco::JSON::Object();
-        attrObject->set("Name", a.name());
-        attrObject->set("Value", a.value());
-        attrArray->add(attrObject);
+        json attrObject;
+        attrObject["Name"] = a.name();
+        attrObject["Value"] = a.value();
+        attrArray.push_back(attrObject);
     }
 
     return infoObject;
 }
 
-static Poco::JSON::Object::Ptr getIIODeviceInfo(IIODevice dev)
+static json getIIODeviceInfo(IIODevice dev)
 {
-    Poco::JSON::Object::Ptr infoObject = new Poco::JSON::Object();
+    json infoObject = new Poco::JSON::Object();
 
     // Device info
-    infoObject->set("Device ID", dev.id());
-    infoObject->set("Device Name", dev.name());
-    infoObject->set("Is Trigger", dev.isTrigger() ? "true" : "false");
+    infoObject["Device ID"] = dev.id();
+    infoObject["Device Name"] = dev.name();
+    infoObject["Is Trigger"] = dev.isTrigger() ? "true" : "false";
 
     // Device attributes
-    Poco::JSON::Array::Ptr attrArray = new Poco::JSON::Array();
-    infoObject->set("Attributes", attrArray);
+    auto &attrArray = infoObject["Attributes"];
     for (auto a : dev.attributes())
     {
-        Poco::JSON::Object::Ptr attrObject = new Poco::JSON::Object();
-        attrObject->set("Name", a.name());
-        attrObject->set("Value", a.value());
-        attrArray->add(attrObject);
+        json attrObject;
+        attrObject["Name"] = a.name();
+        attrObject["Value"] = a.value();
+        attrArray.push_back(attrObject);
     }
 
     // Channels
-    Poco::JSON::Array::Ptr chanArray = new Poco::JSON::Array();
-    infoObject->set("Channels", chanArray);
+    auto &chanArray = infoObject["Channels"];
     for (auto c : dev.channels())
     {
-        chanArray->add(getIIOChannelInfo(c));
+        chanArray.push_back(getIIOChannelInfo(c));
     }
 
     return infoObject;
 }
 
-static Poco::JSON::Object::Ptr enumerateIIODevices(void)
+static std::string enumerateIIODevices(void)
 {
-    Poco::JSON::Object::Ptr topObject = new Poco::JSON::Object();
+    json topObject;
     IIOContext& ctx = IIOContext::get();
 
-    Poco::JSON::Array::Ptr devicesArray = new Poco::JSON::Array();
-    topObject->set("IIO Devices", devicesArray);
+    auto &devicesArray = topObject["IIO Devices"];
     for (auto d : ctx.devices())
     {
-        devicesArray->add(getIIODeviceInfo(d));
+        devicesArray.push_back(getIIODeviceInfo(d));
     }
 
-    topObject->set("IIO Version", ctx.version());
-    topObject->set("IIO Context Name", ctx.name());
-    topObject->set("IIO Context Description", ctx.description());
+    topObject["IIO Version"] = ctx.version();
+    topObject["IIO Context Name"] = ctx.name();
+    topObject["IIO Context Description"] = ctx.description();
 
-    return topObject;
+    return topObject.dump();
 }
 
 pothos_static_block(registerIIOInfo)
