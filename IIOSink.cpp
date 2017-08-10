@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Poco/Error.h>
-#include <Poco/JSON/Array.h>
-#include <Poco/JSON/Object.h>
 #include <poll.h>
 #include <algorithm>
 #include <memory>
@@ -11,6 +9,9 @@
 #include <cstring>
 #include <vector>
 #include "IIOSupport.hpp"
+
+#include <json.hpp>
+using json = nlohmann::json;
 
 /***********************************************************************
  * |PothosDoc IIO Sink
@@ -142,27 +143,21 @@ public:
     {
         IIOContext& ctx = IIOContext::get();
 
-        Poco::JSON::Object::Ptr topObj(new Poco::JSON::Object());
-
-        Poco::JSON::Array::Ptr params(new Poco::JSON::Array());
-        topObj->set("params", params);
+        json topObj;
+        auto &params = topObj["params"];
 
         //configure deviceId dropdown options
-        Poco::JSON::Object::Ptr deviceIdParam(new Poco::JSON::Object());
-        params->add(deviceIdParam);
-        Poco::JSON::Array::Ptr deviceIdOpts(new Poco::JSON::Array());
-        deviceIdParam->set("key", "deviceId");
-        deviceIdParam->set("options", deviceIdOpts);
-        Poco::JSON::Object::Ptr deviceIdWidgetKwargs(new Poco::JSON::Object());
-        deviceIdWidgetKwargs->set("editable", false);
-        deviceIdParam->set("widgetKwargs", deviceIdWidgetKwargs);
-        deviceIdParam->set("widgetType", "DropDown");
+        json deviceIdParam;
+        deviceIdParam["key"] = "deviceId";
+        auto &deviceIdOpts = deviceIdParam["options"];
+        deviceIdParam["widgetKwargs"]["editable"] = false;
+        deviceIdParam["widgetType"] = "DropDown";
 
         //add empty device option associated
-        Poco::JSON::Object::Ptr emptyOption(new Poco::JSON::Object());
-        emptyOption->set("name", "");
-        emptyOption->set("value", "\"\"");
-        deviceIdOpts->add(emptyOption);
+        json emptyOption;
+        emptyOption["name"] = "";
+        emptyOption["value"] = "\"\"";
+        deviceIdOpts.push_back(emptyOption);
 
         //enumerate iio devices
         for (auto d : ctx.devices())
@@ -170,15 +165,14 @@ public:
             //use the standard label convention, but fall-back on driver/serial
             std::string name;
 
-            Poco::JSON::Object::Ptr option(new Poco::JSON::Object());
-            option->set("name", d.name() + " (" + d.id() + ")");
-            option->set("value", "\"" + d.id() + "\"");
-            deviceIdOpts->add(option);
+            json option;
+            option["name"] = d.name() + " (" + d.id() + ")";
+            option["value"] = "\"" + d.id() + "\"";
+            deviceIdOpts.push_back(option);
         }
+        params.push_back(deviceIdParam);
 
-        std::stringstream ss;
-        topObj->stringify(ss, 4);
-        return ss.str();
+        return topObj.dump();
     }
 
     static Block *make(const std::string &deviceId, const std::vector<std::string> &channelIds,

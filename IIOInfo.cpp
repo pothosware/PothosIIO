@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Pothos/Plugin.hpp>
-#include <Poco/JSON/Array.h>
-#include <Poco/JSON/Object.h>
 #include <Poco/Error.h>
 #include <string>
 #include "IIOSupport.hpp"
@@ -39,7 +37,7 @@ static json getIIOChannelInfo(IIOChannel chn)
 
 static json getIIODeviceInfo(IIODevice dev)
 {
-    json infoObject = new Poco::JSON::Object();
+    json infoObject;
 
     // Device info
     infoObject["Device ID"] = dev.id();
