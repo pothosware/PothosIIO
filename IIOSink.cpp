@@ -16,7 +16,7 @@ using json = nlohmann::json;
 /***********************************************************************
  * |PothosDoc IIO Sink
  *
- * The IIO source forwards an input sample stream to an IIO output device.
+ * The IIO sink forwards an input sample stream to an IIO output device.
  *
  * |category /IIO
  * |category /Sinks
@@ -258,7 +258,7 @@ public:
             };
             int ret = ppoll(&pfd, 1, &ts, NULL);
             if (ret < 0)
-                throw Pothos::SystemException("IIOSource::work()", "ppoll failed: " + Poco::Error::getMessage(-ret));
+                throw Pothos::SystemException("IIOSink::work()", "ppoll failed: " + Poco::Error::getMessage(-ret));
             else if (ret == 0)
                 return this->yield();
 
