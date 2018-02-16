@@ -49,6 +49,7 @@ endif()
 ########################################################################
 include_directories(${LIBIIO_INCLUDE_DIRS})
 add_definitions(${LIBIIO_DEFINITIONS})
+include_directories(${JSON_HPP_INCLUDE_DIR})
 
 POTHOS_MODULE_UTIL(
     TARGET IIOSupport
