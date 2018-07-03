@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Poco/Error.h>
+#ifndef _MSC_VER
 #include <poll.h>
+#else
+#include <winsock2.h>
+#endif
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -249,6 +253,7 @@ public:
                 return;
 
             //wait for samples
+            #ifndef _MSC_VER
             struct pollfd pfd = {
                 .fd = this->buf->fd(),
                 .events = POLLIN,
@@ -259,6 +264,11 @@ public:
                 .tv_nsec = static_cast<long int>(this->workInfo().maxTimeoutNs % 10000000)
             };
             int ret = ppoll(&pfd, 1, &ts, NULL);
+            #else
+            struct timeval ts;// = {0, static_cast<long int>(this->workInfo().maxTimeoutNs / 1024)};
+            fd_set fds; FD_ZERO(&fds); FD_SET(this->buf->fd(), &fds);
+            int ret = select(1, &fds, NULL, NULL, &ts);
+            #endif
             if (ret < 0)
                 throw Pothos::SystemException("IIOSource::work()", "ppoll failed: " + Poco::Error::getMessage(-ret));
             else if (ret == 0)
