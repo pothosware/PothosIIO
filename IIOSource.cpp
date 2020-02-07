@@ -1,4 +1,5 @@
 // Copyright (c) 2016 Fiach Antaw
+//               2020 Nicholas Corgan
 // SPDX-License-Identifier: BSL-1.0
 
 #include <Poco/Error.h>
@@ -38,10 +39,8 @@ using json = nlohmann::json;
  * enabled, enable input ports. This option reserves the IIO buffer for this
  * device, and so can only be enabled for one IIO block per device.
  * |preview disable
- * |default True
- * |widget DropDown()
- * |option [True] True
- * |option [False] False
+ * |widget ToggleSwitch(on=True,off=False)
+ * |default true
  *
  * |param bufferSize[Buffer Size] The number of samples to obtain from the IIO
  * device during each refill operation. Larger numbers may reduce overhead but
